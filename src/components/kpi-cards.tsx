@@ -139,7 +139,7 @@ export default function KpiCards({ positions, simulatedPositions, isSimulating }
           </div>
         </div>
         <div className="mt-3 flex items-baseline gap-2">
-          <span className="text-2xl font-bold text-slate-100 tracking-tight font-mono">
+          <span className="text-2xl font-bold text-slate-100 tracking-tight font-mono tabular-nums">
             {formatUsd(active.netWorth)}
           </span>
           {isSimulating && simulated.netWorth !== current.netWorth && (
@@ -174,7 +174,7 @@ export default function KpiCards({ positions, simulatedPositions, isSimulating }
           </div>
         </div>
         <div className="mt-3 flex items-baseline gap-2">
-          <span className="text-2xl font-bold text-slate-100 tracking-tight font-mono">
+          <span className="text-2xl font-bold text-slate-100 tracking-tight font-mono tabular-nums">
             {formatUsd(active.totalCollateral)}
           </span>
           {isSimulating && simulated.totalCollateral !== current.totalCollateral && (
@@ -209,7 +209,7 @@ export default function KpiCards({ positions, simulatedPositions, isSimulating }
           </div>
         </div>
         <div className="mt-3 flex items-baseline gap-2">
-          <span className="text-2xl font-bold text-slate-100 tracking-tight font-mono">
+          <span className="text-2xl font-bold text-slate-100 tracking-tight font-mono tabular-nums">
             {formatUsd(active.totalDebt)}
           </span>
           {isSimulating && simulated.totalDebt !== current.totalDebt && (
@@ -244,7 +244,7 @@ export default function KpiCards({ positions, simulatedPositions, isSimulating }
           </div>
         </div>
         <div className="mt-3 flex items-baseline gap-2">
-          <span className={`text-2xl font-bold tracking-tight font-mono ${
+          <span className={`text-2xl font-bold tracking-tight font-mono tabular-nums ${
             active.netApy >= 0 ? 'text-slate-100' : 'text-rose-400'
           }`}>
             {formatPct(active.netApy)}

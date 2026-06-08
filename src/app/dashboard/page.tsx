@@ -6,6 +6,7 @@ import { Position, Collateral, Borrow } from '@/lib/math-engine';
 import type { PortfolioPosition } from '@/types';
 import DashboardHeader from '@/components/dashboard-header';
 import KpiCards from '@/components/kpi-cards';
+import HealthFactorHero from '@/components/health-factor-hero';
 import AllocationChart from '@/components/allocation-chart';
 import MarketSelector from '@/components/market-selector';
 import LiquidationViews from '@/components/liquidation-views';
@@ -204,6 +205,10 @@ function DashboardContent() {
               selectedMarketId={selectedPosition?.marketId ?? ''}
               onSelectPosition={setSelectedPosition}
             />
+
+            {/* Health Factor — the primary risk metric, surfaced prominently
+                so it's the first thing seen once a wallet's positions load. */}
+            <HealthFactorHero position={allocationPosition} />
 
             {/* KPI Section (scoped to the selected market) */}
             <KpiCards

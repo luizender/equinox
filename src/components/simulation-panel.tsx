@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Position, Collateral, Borrow, AmountChange, applyOverrides } from '@/lib/math-engine';
 import { Slider } from '@/components/ui/slider';
-import { RefreshCw, Trash2, Plus, Info, ArrowRight } from 'lucide-react';
+import { RefreshCw, Trash2, Plus, Info, ArrowRight, ShieldCheck, AlertTriangle } from 'lucide-react';
 
 interface SimulationPanelProps {
   position: Position | null;
@@ -463,41 +463,63 @@ export default function SimulationPanel({
           <div className="text-[10px] text-[#00f2fe] font-bold font-mono tracking-widest uppercase mb-2">
             Simulated Health Status
           </div>
-          <div className="grid grid-cols-3 gap-2 text-center">
-            {/* Health Factor */}
-            <div className="border-r border-slate-800/60 last:border-0 pr-1">
-              <div className="text-[8px] text-slate-500 uppercase font-mono">Health Factor</div>
-              <div className="flex items-center justify-center gap-1 mt-1">
-                <span className="text-xs text-slate-400 font-mono">
-                  {position.healthFactor === Infinity ? '∞' : position.healthFactor.toFixed(2)}
-                </span>
-                <ArrowRight className="w-3 h-3 text-slate-500" />
-                <span className={`text-sm font-bold font-mono ${
-                  simulatedPosition.healthFactor < 1.0
-                    ? 'text-rose-400 animate-pulse'
-                    : simulatedPosition.healthFactor < 1.2
-                    ? 'text-amber-400'
-                    : 'text-emerald-400'
-                }`}>
-                  {simulatedPosition.healthFactor === Infinity ? '∞' : simulatedPosition.healthFactor.toFixed(2)}
-                </span>
-              </div>
-              {simulatedPosition.healthFactor < 1.0 && (
-                <div className="text-[7px] text-rose-400 font-bold uppercase tracking-tighter mt-1 animate-pulse">
-                  LIQUIDATION RISK
-                </div>
+          {/* Health Factor — primary risk indicator */}
+          <div className={`mb-3 rounded-xl border p-4 text-center transition-colors ${
+            simulatedPosition.healthFactor < 1.0
+              ? 'border-rose-500/40 bg-rose-500/5 shadow-glow-rose'
+              : simulatedPosition.healthFactor < 1.2
+              ? 'border-amber-500/40 bg-amber-500/5'
+              : 'border-emerald-500/30 bg-emerald-500/5'
+          }`}>
+            <div className="flex items-center justify-center gap-1.5 text-[10px] text-slate-400 font-mono uppercase tracking-widest">
+              {simulatedPosition.healthFactor < 1.2 ? (
+                <AlertTriangle className="w-3 h-3" />
+              ) : (
+                <ShieldCheck className="w-3 h-3" />
               )}
+              Health Factor
             </div>
+            <div className="flex items-center justify-center gap-2 mt-1">
+              <span className="text-lg font-semibold font-sans tabular-nums text-slate-500">
+                {position.healthFactor === Infinity ? '∞' : position.healthFactor.toFixed(2)}
+              </span>
+              <ArrowRight className="w-4 h-4 text-slate-500" />
+              <span className={`text-4xl font-extrabold font-sans tabular-nums tracking-tight ${
+                simulatedPosition.healthFactor < 1.0
+                  ? 'text-rose-400 animate-pulse'
+                  : simulatedPosition.healthFactor < 1.2
+                  ? 'text-amber-400'
+                  : 'text-emerald-400'
+              }`}>
+                {simulatedPosition.healthFactor === Infinity ? '∞' : simulatedPosition.healthFactor.toFixed(2)}
+              </span>
+            </div>
+            <div className={`mt-0.5 text-[10px] font-bold uppercase tracking-wider ${
+              simulatedPosition.healthFactor < 1.0
+                ? 'text-rose-400 animate-pulse'
+                : simulatedPosition.healthFactor < 1.2
+                ? 'text-amber-400'
+                : 'text-emerald-400'
+            }`}>
+              {simulatedPosition.healthFactor < 1.0
+                ? 'Liquidation Risk'
+                : simulatedPosition.healthFactor < 1.2
+                ? 'At Risk'
+                : 'Safe'}
+            </div>
+          </div>
 
+          {/* Secondary metrics */}
+          <div className="grid grid-cols-2 gap-2 text-center">
             {/* Current LTV */}
-            <div className="border-r border-slate-800/60 last:border-0 px-1">
+            <div className="border-r border-slate-800/60 pr-1">
               <div className="text-[8px] text-slate-500 uppercase font-mono">Current LTV</div>
               <div className="flex items-center justify-center gap-1 mt-1">
-                <span className="text-xs text-slate-400 font-mono">
+                <span className="text-xs text-slate-400 font-mono tabular-nums">
                   {(position.currentLtv * 100).toFixed(1)}%
                 </span>
                 <ArrowRight className="w-3 h-3 text-slate-500" />
-                <span className="text-sm font-bold font-mono text-slate-200">
+                <span className="text-sm font-bold font-mono tabular-nums text-slate-200">
                   {(simulatedPosition.currentLtv * 100).toFixed(1)}%
                 </span>
               </div>
@@ -507,11 +529,11 @@ export default function SimulationPanel({
             <div className="px-1">
               <div className="text-[8px] text-slate-500 uppercase font-mono">Net Value</div>
               <div className="flex items-center justify-center gap-1 mt-1">
-                <span className="text-xs text-slate-400 font-mono">
+                <span className="text-xs text-slate-400 font-mono tabular-nums">
                   ${position.netValue >= 1000 ? `${(position.netValue / 1000).toFixed(1)}k` : position.netValue.toFixed(0)}
                 </span>
                 <ArrowRight className="w-3 h-3 text-slate-500" />
-                <span className={`text-sm font-bold font-mono ${
+                <span className={`text-sm font-bold font-mono tabular-nums ${
                   simulatedPosition.netValue >= position.netValue ? 'text-emerald-400' : 'text-rose-400'
                 }`}>
                   ${simulatedPosition.netValue >= 1000 ? `${(simulatedPosition.netValue / 1000).toFixed(1)}k` : simulatedPosition.netValue.toFixed(0)}
