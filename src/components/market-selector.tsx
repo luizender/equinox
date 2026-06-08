@@ -1,8 +1,7 @@
 'use client';
 
-import React from 'react';
 import { Position } from '@/lib/math-engine';
-import { getMarketMeta } from '@/lib/markets';
+import { getMarketMeta, getMarketDisplayName } from '@/lib/markets';
 import { Layers } from 'lucide-react';
 
 interface MarketSelectorProps {
@@ -72,7 +71,7 @@ export default function MarketSelector({
                       isSelected ? 'text-white' : 'text-slate-200 group-hover:text-white'
                     }`}
                   >
-                    {pos.marketName}
+                    {getMarketDisplayName(pos.marketId, pos.marketName)}
                   </span>
                 </div>
                 <div className="text-[10px] text-slate-400 font-mono mt-0.5 flex items-center gap-2">

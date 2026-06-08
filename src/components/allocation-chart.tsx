@@ -1,6 +1,5 @@
 'use client';
 
-import React from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { Position } from '@/lib/math-engine';
 

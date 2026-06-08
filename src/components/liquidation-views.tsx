@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Position, singleAssetLevels, crashScenario, CrashStatus } from '@/lib/math-engine';
 import { AlertCircle, AlertTriangle, ShieldCheck, TrendingDown } from 'lucide-react';
+import { getMarketDisplayName } from '@/lib/markets';
 
 interface LiquidationViewsProps {
   position: Position | null;
@@ -44,7 +45,7 @@ export default function LiquidationViews({ position }: LiquidationViewsProps) {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-800/50 pb-4 mb-5 gap-3">
         <div>
           <h3 className="text-sm font-semibold text-slate-200 tracking-wide uppercase">Liquidation Analysis</h3>
-          <p className="text-[10px] text-slate-500 font-mono mt-0.5">{position.marketName}</p>
+          <p className="text-[10px] text-slate-500 font-mono mt-0.5">{getMarketDisplayName(position.marketId, position.marketName)}</p>
         </div>
         
         {/* Tab Buttons */}

@@ -1,6 +1,5 @@
 'use client';
 
-import React from 'react';
 import { ArrowDownRight, ArrowUpRight, DollarSign, Percent } from 'lucide-react';
 import { Position } from '@/lib/math-engine';
 
