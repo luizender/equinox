@@ -2,26 +2,12 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Activity, ShieldAlert, Copy, Check, ArrowRight } from 'lucide-react';
+import { Activity, ShieldAlert, ArrowRight } from 'lucide-react';
 import { validateAddress } from '@/lib/validation';
-
-const DEMO_WALLETS = [
-  {
-    protocol: 'Kamino (Solana)',
-    address: '8B4F8g46B8KkL6Vs742d35Cc6634C0532925a3b8',
-    label: 'Solana whales / Active klend loans',
-  },
-  {
-    protocol: 'Aave V3 (EVM)',
-    address: '0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045',
-    label: 'vitalik.eth / Large multi-collateral Aave position',
-  },
-];
 
 export default function Home() {
   const router = useRouter();
   const [address, setAddress] = useState('');
-  const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
 
   // errorMsg and protocolBadge are pure functions of `address` — derive them
   // during render instead of mirroring `address` into state via an effect.
@@ -41,12 +27,6 @@ export default function Home() {
       return;
     }
     router.push(`/dashboard?address=${encodeURIComponent(address)}&chain=all`);
-  };
-
-  const handleCopy = (text: string, index: number) => {
-    navigator.clipboard.writeText(text);
-    setCopiedIndex(index);
-    setTimeout(() => setCopiedIndex(null), 2000);
   };
 
   return (
@@ -110,47 +90,6 @@ export default function Home() {
               <ArrowRight className="w-4 h-4" />
             </button>
           </form>
-        </div>
-
-        {/* Demo Wallets Catalog */}
-        <div className="space-y-3 text-left">
-          <h3 className="text-xs font-bold text-slate-400 tracking-wider uppercase pl-1">Demo Wallet Addresses</h3>
-          <div className="grid grid-cols-1 gap-2.5">
-            {DEMO_WALLETS.map((demo, idx) => (
-              <div
-                key={demo.address}
-                className="bg-slate-900/40 border border-slate-800/80 rounded-xl p-3.5 flex items-center justify-between gap-4 group hover:border-slate-700/50 transition-colors"
-              >
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wide">
-                      {demo.protocol}
-                    </span>
-                    <span className="text-[9px] text-slate-500 font-sans truncate">{demo.label}</span>
-                  </div>
-                  <div className="text-xs text-slate-400 font-mono truncate mt-1">{demo.address}</div>
-                </div>
-
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => handleCopy(demo.address, idx)}
-                    className="p-2 rounded-lg bg-slate-950 border border-slate-850 hover:text-white transition-colors cursor-pointer text-slate-400"
-                    title="Copy address"
-                  >
-                    {copiedIndex === idx ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                  </button>
-                  <button
-                    onClick={() => {
-                      setAddress(demo.address);
-                    }}
-                    className="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-200 transition-colors cursor-pointer"
-                  >
-                    Select
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
         </div>
       </div>
     </div>
