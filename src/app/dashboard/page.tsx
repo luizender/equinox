@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, Suspense } from 'react';
+import React, { useState, useEffect, useCallback, useRef, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Position, Collateral, Borrow } from '@/lib/math-engine';
 import type { PortfolioPosition } from '@/types';
@@ -12,6 +12,19 @@ import LiquidationViews from '@/components/liquidation-views';
 import SimulationPanel from '@/components/simulation-panel';
 import { Loader2, ArrowLeft, ShieldAlert } from 'lucide-react';
 import Link from 'next/link';
+
+// Convert the API's plain JSON positions into rich Position instances.
+function parsePositions(rawPositions: PortfolioPosition[]): Position[] {
+  return rawPositions.map((p) => {
+    const colList = p.collateral.map(
+      (c) => new Collateral(c.symbol, c.amount, c.price, c.liquidationThreshold)
+    );
+    const borList = p.borrows.map(
+      (b) => new Borrow(b.symbol, b.amount, b.price, b.borrowFactor)
+    );
+    return new Position(p.marketName, p.address, colList, borList, p.debtValue, p.marketId);
+  });
+}
 
 function DashboardContent() {
   const searchParams = useSearchParams();
@@ -25,7 +38,7 @@ function DashboardContent() {
   const [simulatedPosition, setSimulatedPosition] = useState<Position | null>(null);
   const [selectedPosition, setSelectedPosition] = useState<Position | null>(null);
   
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true); // a fetch always kicks off on mount
   const [error, setError] = useState('');
   
   // Watch mode states
@@ -34,77 +47,74 @@ function DashboardContent() {
   const [flashing, setFlashing] = useState(false);
   const [isSimulating, setIsSimulating] = useState(false);
 
-  // Parse helper
-  const parsePositions = (rawPositions: PortfolioPosition[]): Position[] => {
-    return rawPositions.map((p) => {
-      const colList = p.collateral.map(
-        (c) => new Collateral(c.symbol, c.amount, c.price, c.liquidationThreshold)
-      );
-      const borList = p.borrows.map(
-        (b) => new Borrow(b.symbol, b.amount, b.price, b.borrowFactor)
-      );
-      return new Position(p.marketName, p.address, colList, borList, p.debtValue, p.marketId);
-    });
-  };
+  // Keep the latest selection in a ref so fetchPortfolio can preserve it across
+  // refreshes without being re-created — and thus re-fetching — on every click.
+  const selectedPositionRef = useRef<Position | null>(null);
+  useEffect(() => {
+    selectedPositionRef.current = selectedPosition;
+  }, [selectedPosition]);
 
-  // Fetch portfolio data
-  const fetchPortfolio = async (showLoading = true) => {
-    if (!address) return;
-    if (showLoading) setIsLoading(true);
-    setError('');
+  // Fetch portfolio data. Stable across renders except when the watched address
+  // or chain changes, so it can be a safe effect dependency.
+  const fetchPortfolio = useCallback(
+    async (showLoading = true) => {
+      if (!address) return;
+      if (showLoading) setIsLoading(true);
+      setError('');
 
-    try {
-      const url = `/api/portfolio/${encodeURIComponent(address)}?chain=${encodeURIComponent(selectedChain)}`;
-      const res = await fetch(url);
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.error || `HTTP Error ${res.status}`);
+      try {
+        const url = `/api/portfolio/${encodeURIComponent(address)}?chain=${encodeURIComponent(selectedChain)}`;
+        const res = await fetch(url);
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(body.error || `HTTP Error ${res.status}`);
+        }
+
+        const data = await res.json();
+        const parsed = parsePositions(data.positions || []);
+        setPositions(parsed);
+
+        // Preserve selection if possible, otherwise select first position
+        if (parsed.length > 0) {
+          const prev = selectedPositionRef.current;
+          const matchingPos = prev ? parsed.find((p) => p.marketId === prev.marketId) : null;
+          setSelectedPosition(matchingPos || parsed[0]);
+        } else {
+          setSelectedPosition(null);
+        }
+
+        // Flash green border to notify update
+        setFlashing(true);
+        setTimeout(() => setFlashing(false), 1000);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to fetch portfolio data');
+      } finally {
+        setIsLoading(false);
       }
-      
-      const data = await res.json();
-      const parsed = parsePositions(data.positions || []);
-      setPositions(parsed);
+    },
+    [address, selectedChain]
+  );
 
-      // Preserve selection if possible, otherwise select first position
-      if (parsed.length > 0) {
-        const matchingPos = selectedPosition 
-          ? parsed.find((p) => p.marketId === selectedPosition.marketId)
-          : null;
-        setSelectedPosition(matchingPos || parsed[0]);
-      } else {
-        setSelectedPosition(null);
-      }
-
-      // Flash green border to notify update
-      setFlashing(true);
-      setTimeout(() => setFlashing(false), 1000);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch portfolio data');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Initial fetch and trigger on address change. Kicking off the fetch (which
-  // flips loading/data state) is the whole point of this effect, and we only
-  // want it to re-run when the watched address or chain changes.
+  // Initial fetch / refetch whenever the watched address or chain changes. The
+  // effect's job is only to *kick off* the request — the actual state updates
+  // happen inside the scheduled fetch, not synchronously in the effect body.
   useEffect(() => {
     if (!address) {
       router.push('/');
       return;
     }
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    fetchPortfolio(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [address, selectedChain]);
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) fetchPortfolio(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [address, fetchPortfolio, router]);
 
-  // Watch mode timer logic
+  // Watch mode: poll on a 15s countdown while active; reset the timer on exit.
   useEffect(() => {
-    if (!watchMode || !address) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setCountdown(15);
-      return;
-    }
+    if (!watchMode || !address) return;
 
     const interval = setInterval(() => {
       setCountdown((prev) => {
@@ -116,9 +126,11 @@ function DashboardContent() {
       });
     }, 1000);
 
-    return () => clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [watchMode, address, selectedChain, selectedPosition?.marketId]);
+    return () => {
+      clearInterval(interval);
+      setCountdown(15);
+    };
+  }, [watchMode, address, fetchPortfolio]);
 
   // Search trigger from header
   const handleSearch = (newAddress: string, newChain: string) => {
@@ -208,11 +220,12 @@ function DashboardContent() {
                 <LiquidationViews position={isSimulating ? simulatedPosition : selectedPosition} />
               </div>
 
-              {/* Right: What-If Simulation (inline with the liquidation analysis) */}
+              {/* Right: What-If Simulation (inline with the liquidation analysis).
+                  Keyed by market so switching markets remounts it with a clean slate. */}
               <SimulationPanel
+                key={selectedPosition?.marketId ?? 'none'}
                 position={selectedPosition}
                 onSimulationChange={setSimulatedPosition}
-                isSimulating={isSimulating}
                 setIsSimulating={setIsSimulating}
               />
             </div>

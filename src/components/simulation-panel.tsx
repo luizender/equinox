@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Position, Collateral, Borrow, AmountChange, applyOverrides } from '@/lib/math-engine';
 import { Slider } from '@/components/ui/slider';
 import { RefreshCw, Trash2, Plus, Info, ArrowRight } from 'lucide-react';
@@ -8,7 +8,6 @@ import { RefreshCw, Trash2, Plus, Info, ArrowRight } from 'lucide-react';
 interface SimulationPanelProps {
   position: Position | null;
   onSimulationChange: (simPosition: Position | null) => void;
-  isSimulating: boolean;
   setIsSimulating: (simulating: boolean) => void;
 }
 
@@ -20,7 +19,6 @@ interface AmountState {
 export default function SimulationPanel({
   position,
   onSimulationChange,
-  isSimulating,
   setIsSimulating,
 }: SimulationPanelProps) {
   // Price overrides by uppercase symbol
@@ -34,15 +32,14 @@ export default function SimulationPanel({
   const [addedCollateral, setAddedCollateral] = useState<Collateral[]>([]);
   const [addedBorrows, setAddedBorrows] = useState<Borrow[]>([]);
   
-  // Simulated position local state for comparison widget
-  const [simulatedPosition, setSimulatedPosition] = useState<Position | null>(null);
-
   // Add Asset form state
   const [newSymbol, setNewSymbol] = useState('');
   const [newType, setNewType] = useState<'collateral' | 'borrow'>('collateral');
   const [resolvingReserve, setResolvingReserve] = useState(false);
   const [resolveError, setResolveError] = useState('');
 
+  // Clearing the override inputs cascades through the memo + notify effect below,
+  // which resets the simulated position and tells the parent simulation is off.
   const handleClear = () => {
     setPrices({});
     setCollateralAmounts({});
@@ -51,65 +48,47 @@ export default function SimulationPanel({
     setAddedBorrows([]);
     setNewSymbol('');
     setResolveError('');
-    setIsSimulating(false);
-    setSimulatedPosition(null);
   };
 
-  // Reset all overrides when position changes
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    handleClear();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [position?.marketId, position?.address]);
+  // The simulated position is a pure function of the position + override inputs —
+  // derive it (and whether anything changed) instead of storing it in state.
+  const { simulatedPosition, hasChanges } = useMemo(() => {
+    if (!position) return { simulatedPosition: null as Position | null, hasChanges: false };
 
-  // Compute overridden position in real-time when inputs change
-  useEffect(() => {
-    /* eslint-disable react-hooks/set-state-in-effect -- syncing the derived
-       simulated position and notifying the parent is this effect's purpose */
-    if (!position) {
-      setSimulatedPosition(null);
-      onSimulationChange(null);
-      setIsSimulating(false);
-      return;
-    }
-
-    // Map state records to AmountChange classes
-    const colChanges: Record<string, AmountChange> = {};
-    Object.entries(collateralAmounts).forEach(([sym, state]) => {
-      colChanges[sym] = new AmountChange(state.value, state.isDelta);
-    });
-
-    const borChanges: Record<string, AmountChange> = {};
-    Object.entries(borrowAmounts).forEach(([sym, state]) => {
-      borChanges[sym] = new AmountChange(state.value, state.isDelta);
-    });
-
-    const hasChanges =
+    const changed =
       Object.keys(prices).length > 0 ||
       Object.keys(collateralAmounts).length > 0 ||
       Object.keys(borrowAmounts).length > 0 ||
       addedCollateral.length > 0 ||
       addedBorrows.length > 0;
 
-    if (hasChanges) {
-      const simPos = applyOverrides(position, {
-        prices,
-        collateralAmounts: colChanges,
-        borrowAmounts: borChanges,
-        addCollateral: addedCollateral,
-        addBorrows: addedBorrows,
-      });
-      setSimulatedPosition(simPos);
-      onSimulationChange(simPos);
-      setIsSimulating(true);
-    } else {
-      setSimulatedPosition(null);
-      onSimulationChange(null);
-      setIsSimulating(false);
-    }
-    /* eslint-enable react-hooks/set-state-in-effect */
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [prices, collateralAmounts, borrowAmounts, addedCollateral, addedBorrows, position]);
+    if (!changed) return { simulatedPosition: null as Position | null, hasChanges: false };
+
+    const colChanges: Record<string, AmountChange> = {};
+    Object.entries(collateralAmounts).forEach(([sym, state]) => {
+      colChanges[sym] = new AmountChange(state.value, state.isDelta);
+    });
+    const borChanges: Record<string, AmountChange> = {};
+    Object.entries(borrowAmounts).forEach(([sym, state]) => {
+      borChanges[sym] = new AmountChange(state.value, state.isDelta);
+    });
+
+    const simPos = applyOverrides(position, {
+      prices,
+      collateralAmounts: colChanges,
+      borrowAmounts: borChanges,
+      addCollateral: addedCollateral,
+      addBorrows: addedBorrows,
+    });
+    return { simulatedPosition: simPos, hasChanges: true };
+  }, [position, prices, collateralAmounts, borrowAmounts, addedCollateral, addedBorrows]);
+
+  // Push the derived result up so sibling panels (KPIs, allocation, liquidation)
+  // can react. onSimulationChange/setIsSimulating are stable parent state setters.
+  useEffect(() => {
+    onSimulationChange(simulatedPosition);
+    setIsSimulating(hasChanges);
+  }, [simulatedPosition, hasChanges, onSimulationChange, setIsSimulating]);
 
   if (!position) {
     return (
@@ -467,7 +446,7 @@ export default function SimulationPanel({
           <h3 className="text-sm font-semibold text-slate-200 tracking-wide uppercase">What-If Simulation</h3>
           <p className="text-[10px] text-slate-500 font-mono mt-0.5">Override parameters to test health outcomes</p>
         </div>
-        {isSimulating && (
+        {hasChanges && (
           <button
             onClick={handleClear}
             className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-rose-950/40 border border-rose-500/30 text-rose-400 hover:bg-rose-900/40 text-xs font-semibold font-mono cursor-pointer transition-all"
@@ -479,7 +458,7 @@ export default function SimulationPanel({
       </div>
 
       {/* Comparison Engine Banner */}
-      {isSimulating && simulatedPosition && (
+      {hasChanges && simulatedPosition && (
         <div className="mb-4 p-4 rounded-lg bg-slate-900/60 border border-[#00f2fe]/20 shadow-glow-cyan">
           <div className="text-[10px] text-[#00f2fe] font-bold font-mono tracking-widest uppercase mb-2">
             Simulated Health Status
