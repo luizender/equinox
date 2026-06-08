@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Search, Activity, Wifi, WifiOff, RefreshCw, Loader2, ChevronDown, Check } from 'lucide-react';
+import Link from 'next/link';
 import { validateAddress } from '@/lib/validation';
 import { AAVE_CHAINS } from '@/lib/config';
 
@@ -69,23 +70,22 @@ export default function DashboardHeader({
 
   return (
     <header
-      className={`w-full py-4 px-6 bg-[#0c1224]/80 backdrop-blur-md border-b border-slate-800/80 sticky top-0 z-40 transition-all duration-300 ${
-        flashing ? 'border-emerald-500/50 shadow-[0_0_15px_rgba(16,185,129,0.15)]' : ''
-      }`}
+      className={`w-full py-4 px-6 bg-[#0c1224]/80 backdrop-blur-md border-b border-slate-800/80 sticky top-0 z-40 transition-all duration-300 ${flashing ? 'border-emerald-500/50 shadow-[0_0_15px_rgba(16,185,129,0.15)]' : ''
+        }`}
     >
       <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-4">
         {/* Title / Logo */}
-        <div className="flex items-center gap-3">
+        <Link href="/" className="flex items-center gap-3 group">
           <div className="w-9 h-9 rounded-lg bg-gradient-to-tr from-[#00f2fe] to-[#9b51e0] flex items-center justify-center shadow-lg shadow-[#00f2fe]/20">
             <Activity className="w-5 h-5 text-white" />
           </div>
           <div>
-            <h1 className="text-xl font-bold tracking-tight bg-gradient-to-r from-white via-slate-100 to-slate-300 bg-clip-text text-transparent">
+            <h1 className="text-xl font-bold tracking-tight bg-gradient-to-r from-white via-slate-100 to-slate-300 bg-clip-text text-transparent group-hover:brightness-110 transition">
               EQUINOX
             </h1>
             <p className="text-[10px] text-slate-400 tracking-widest font-mono">Lending & Liquidation Dashboard</p>
           </div>
-        </div>
+        </Link>
 
         {/* Search & Configuration Forms */}
         <form onSubmit={handleSubmit} className="flex-1 max-w-2xl flex flex-col sm:flex-row gap-2">
@@ -95,11 +95,10 @@ export default function DashboardHeader({
               placeholder="Paste Solana or EVM address..."
               value={addressInput}
               onChange={(e) => setAddressInput(e.target.value)}
-              className={`w-full h-11 pl-4 pr-32 rounded-lg bg-slate-900/60 border ${
-                errorMsg
+              className={`w-full h-11 pl-4 pr-32 rounded-lg bg-slate-900/60 border ${errorMsg
                   ? 'border-red-500/50 focus:border-red-500 focus:ring-1 focus:ring-red-500'
                   : 'border-slate-800/80 focus:border-[#00f2fe]/50 focus:ring-1 focus:ring-[#00f2fe]/20'
-              } text-slate-100 text-sm placeholder-slate-500 focus:outline-none transition-all`}
+                } text-slate-100 text-sm placeholder-slate-500 focus:outline-none transition-all`}
             />
             {protocolBadge && (
               <span className={`absolute right-3 top-2.5 px-2.5 py-0.5 rounded text-[10px] font-semibold text-white bg-gradient-to-r ${protocolBadge.gradient} shadow-sm`}>
@@ -168,11 +167,10 @@ export default function DashboardHeader({
           {/* Watch Mode Toggle */}
           <button
             onClick={() => onWatchModeToggle(!watchMode)}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg border transition-all duration-200 cursor-pointer ${
-              watchMode
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg border transition-all duration-200 cursor-pointer ${watchMode
                 ? 'bg-emerald-950/30 border-emerald-500/30 text-emerald-400'
                 : 'bg-slate-900/40 border-slate-800/80 text-slate-400'
-            }`}
+              }`}
           >
             {watchMode ? <Wifi className="w-4 h-4" /> : <WifiOff className="w-4 h-4" />}
             <span className="text-xs font-medium font-mono">Live Watch</span>
