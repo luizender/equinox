@@ -4,13 +4,8 @@
  * since fetch POST requests cannot use Next.js revalidation.
  */
 
-import { AAVE_API, AAVE_CHAINS } from './config';
+import { AAVE_API, AAVE_CHAINS } from '../config';
 import type {
-  AaveMarket,
-  AaveReserve,
-  AaveSupply,
-  AaveBorrow,
-  AaveUserState,
   PortfolioPosition,
   PortfolioAsset,
   PortfolioBorrowAsset,
@@ -19,6 +14,50 @@ import type {
 
 const USER_AGENT = 'equinox/0.1';
 const CACHE_TTL_MS = 15_000;
+
+// --------------------------------------------------------------------------- //
+// Aave GraphQL API response types (private to this client)
+// --------------------------------------------------------------------------- //
+
+interface AaveMarket {
+  address: string;
+  name: string;
+  chain: { chainId: number };
+  userState: { healthFactor: number; eModeEnabled: boolean } | null;
+  reserves: AaveReserve[];
+}
+
+interface AaveReserve {
+  underlyingToken: { symbol: string; address: string };
+  supplyInfo: { liquidationThreshold: { value: string } };
+  userState: { emode: { liquidationThreshold: { value: string } } | null } | null;
+  usdExchangeRate: string;
+}
+
+interface AaveSupply {
+  market: { address: string; chain: { chainId: number } };
+  currency: { symbol: string; address: string };
+  balance: { amount: { value: string }; usdPerToken: string; usd: string };
+  apy: { value: string };
+  isCollateral: boolean;
+}
+
+interface AaveBorrow {
+  market: { address: string; chain: { chainId: number } };
+  currency: { symbol: string; address: string };
+  debt: { amount: { value: string }; usdPerToken: string; usd: string };
+  apy: { value: string };
+}
+
+/**
+ * Per-user, per-market state. Aave computes this directly, so it already folds
+ * in incentive rewards and non-collateral supplies. Only reliable when the
+ * market is queried for a single chain (multi-chain requests zero it out).
+ */
+interface AaveUserState {
+  netAPY: { value: string } | null;
+  healthFactor: string | null;
+}
 
 // --------------------------------------------------------------------------- //
 // GraphQL queries (matching lend-liq's Python implementation)

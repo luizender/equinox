@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { resolveChainIds } from '../src/lib/aave-client';
+import { resolveChainIds } from '../src/lib/clients/aave';
 
 // --------------------------------------------------------------------------- //
 // Test the Aave chain resolver (pure logic, no network)
@@ -106,7 +106,7 @@ describe('Kamino response parsing', () => {
 
     vi.stubGlobal('fetch', fetchMock);
 
-    const { loadKaminoPositions } = await import('../src/lib/kamino-client');
+    const { loadKaminoPositions } = await import('../src/lib/clients/kamino');
     const positions = await loadKaminoPositions('SomeWallet');
 
     expect(positions).toHaveLength(1);
@@ -136,6 +136,46 @@ describe('Kamino response parsing', () => {
     expect(pos.debtValue).toBeCloseTo(2041983.6);
   });
 
+  it('falls back to zero APY when reserve metrics are falsy or the token is absent', async () => {
+    const fetchMock = vi.fn();
+
+    // Portfolio response
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ lending: [{ address: 'OBL1', marketAddress: 'MKT1' }] }),
+    });
+
+    // Market metadata
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ name: 'Main Market' }),
+    });
+
+    // Reserve metrics with falsy APYs -> Number(x) || 0 fallback, and a token
+    // that none of the loan's assets reference -> apyMap.get(...) ?? 0 fallback.
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => [
+        { liquidityToken: 'OTHER', reserve: 'RSV_OTHER', supplyApy: 0, borrowApy: 0 },
+      ],
+    });
+
+    // Loan detail referencing assets absent from the reserve metrics
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => mockKaminoLoanDetail,
+    });
+
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { loadKaminoPositions } = await import('../src/lib/clients/kamino');
+    const positions = await loadKaminoPositions('FallbackWallet');
+
+    expect(positions).toHaveLength(1);
+    expect(positions[0].collateral[0].supplyApy).toBe(0);
+    expect(positions[0].borrows[0].borrowApy).toBe(0);
+  });
+
   it('returns empty array when portfolio has no lending positions', async () => {
     const fetchMock = vi.fn();
     fetchMock.mockResolvedValueOnce({
@@ -144,7 +184,7 @@ describe('Kamino response parsing', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    const { loadKaminoPositions } = await import('../src/lib/kamino-client');
+    const { loadKaminoPositions } = await import('../src/lib/clients/kamino');
     const positions = await loadKaminoPositions('EmptyWallet');
     expect(positions).toHaveLength(0);
   });
@@ -157,7 +197,7 @@ describe('Kamino response parsing', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    const { loadKaminoPositions } = await import('../src/lib/kamino-client');
+    const { loadKaminoPositions } = await import('../src/lib/clients/kamino');
     const positions = await loadKaminoPositions('NoLendingWallet');
     expect(positions).toHaveLength(0);
   });
@@ -171,7 +211,7 @@ describe('Kamino response parsing', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    const { loadKaminoPositions } = await import('../src/lib/kamino-client');
+    const { loadKaminoPositions } = await import('../src/lib/clients/kamino');
     await expect(loadKaminoPositions('BadWallet')).rejects.toThrow('Kamino API error');
   });
 
@@ -215,7 +255,7 @@ describe('Kamino response parsing', () => {
 
     vi.stubGlobal('fetch', fetchMock);
 
-    const { loadKaminoPositions } = await import('../src/lib/kamino-client');
+    const { loadKaminoPositions } = await import('../src/lib/clients/kamino');
     const positions = await loadKaminoPositions('DoubleWallet');
 
     expect(positions).toHaveLength(2);
@@ -265,7 +305,7 @@ describe('Kamino reserve resolution', () => {
 
     vi.stubGlobal('fetch', fetchMock);
 
-    const { resolveKaminoReserve } = await import('../src/lib/kamino-client');
+    const { resolveKaminoReserve } = await import('../src/lib/clients/kamino');
     const info = await resolveKaminoReserve('MKT1', 'sol');
 
     expect(info).not.toBeNull();
@@ -283,7 +323,7 @@ describe('Kamino reserve resolution', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    const { resolveKaminoReserve } = await import('../src/lib/kamino-client');
+    const { resolveKaminoReserve } = await import('../src/lib/clients/kamino');
     const info = await resolveKaminoReserve('MKT1', 'BONK');
     expect(info).toBeNull();
   });
@@ -300,7 +340,7 @@ describe('Kamino reserve resolution', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    const { resolveKaminoReserve } = await import('../src/lib/kamino-client');
+    const { resolveKaminoReserve } = await import('../src/lib/clients/kamino');
     const info = await resolveKaminoReserve('MKT1', 'SOL');
     expect(info).toBeNull();
   });
@@ -317,7 +357,7 @@ describe('Kamino reserve resolution', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    const { resolveKaminoReserve } = await import('../src/lib/kamino-client');
+    const { resolveKaminoReserve } = await import('../src/lib/clients/kamino');
     const info = await resolveKaminoReserve('MKT1', 'SOL');
     expect(info).toBeNull();
   });
@@ -334,7 +374,7 @@ describe('Kamino reserve resolution', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    const { resolveKaminoReserve } = await import('../src/lib/kamino-client');
+    const { resolveKaminoReserve } = await import('../src/lib/clients/kamino');
     const info = await resolveKaminoReserve('MKT1', 'SOL');
     expect(info).toBeNull();
   });
@@ -353,7 +393,7 @@ describe('Kamino reserve resolution', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    const { resolveKaminoReserve } = await import('../src/lib/kamino-client');
+    const { resolveKaminoReserve } = await import('../src/lib/clients/kamino');
     const info = await resolveKaminoReserve('MKT1', 'SOL');
     expect(info).not.toBeNull();
     expect(info!.price).toBe(0);
@@ -382,7 +422,7 @@ describe('Aave V3 client integration', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    const { loadAavePositions } = await import('../src/lib/aave-client');
+    const { loadAavePositions } = await import('../src/lib/clients/aave');
     const result = await loadAavePositions('0xUserEmpty', [1]);
     expect(result).toEqual([]);
   });
@@ -478,7 +518,7 @@ describe('Aave V3 client integration', () => {
 
     vi.stubGlobal('fetch', fetchMock);
 
-    const { loadAavePositions } = await import('../src/lib/aave-client');
+    const { loadAavePositions } = await import('../src/lib/clients/aave');
     const positions = await loadAavePositions('0xUserCorrect', [1]);
 
     expect(positions).toHaveLength(1);
@@ -513,6 +553,71 @@ describe('Aave V3 client integration', () => {
     expect(pos.debtValue).toBe(300);
   });
 
+  it('falls back to null net APY and health factor when userState is absent', async () => {
+    const fetchMock = vi.fn();
+
+    // Markets response
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        data: {
+          markets: [
+            {
+              address: '0xMKT1',
+              name: 'Ethereum Main Market',
+              chain: { chainId: 1 },
+              userState: null,
+              reserves: [
+                {
+                  underlyingToken: { symbol: 'USDC', address: '0xUSDC' },
+                  supplyInfo: { liquidationThreshold: { value: '0.8' } },
+                  userState: null,
+                  usdExchangeRate: '1.0',
+                },
+              ],
+            },
+          ],
+        },
+      }),
+    });
+
+    // Positions response
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        data: {
+          userSupplies: [
+            {
+              market: { address: '0xMKT1', chain: { chainId: 1 } },
+              currency: { symbol: 'USDC', address: '0xUSDC' },
+              balance: { amount: { value: '1000' }, usdPerToken: '1.0', usd: '1000' },
+              apy: { value: '0.03' },
+              isCollateral: true,
+            },
+          ],
+          userBorrows: [],
+        },
+      }),
+    });
+
+    // User-state response with the market present but no userState payload
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        data: { markets: [{ address: '0xMKT1', userState: null }] },
+      }),
+    });
+
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { loadAavePositions } = await import('../src/lib/clients/aave');
+    const positions = await loadAavePositions('0xUserNullState', [1]);
+
+    expect(positions).toHaveLength(1);
+    expect(positions[0].netApy).toBeNull();
+    expect(positions[0].healthFactor).toBeNull();
+  });
+
   it('skips positions that have no collateral and no debt', async () => {
     const fetchMock = vi.fn();
     fetchMock.mockResolvedValueOnce({
@@ -541,7 +646,7 @@ describe('Aave V3 client integration', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    const { loadAavePositions } = await import('../src/lib/aave-client');
+    const { loadAavePositions } = await import('../src/lib/clients/aave');
     const positions = await loadAavePositions('0xUserSkips', [1]);
     expect(positions).toHaveLength(0);
   });
@@ -569,7 +674,7 @@ describe('Aave V3 client integration', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    const { resolveAaveReserve } = await import('../src/lib/aave-client');
+    const { resolveAaveReserve } = await import('../src/lib/clients/aave');
     const reserve = await resolveAaveReserve('0xUserEmode', '1:0xMKT1', 'USDC');
     expect(reserve).not.toBeNull();
     expect(reserve!.symbol).toBe('USDC');
@@ -600,7 +705,7 @@ describe('Aave V3 client integration', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    const { resolveAaveReserve } = await import('../src/lib/aave-client');
+    const { resolveAaveReserve } = await import('../src/lib/clients/aave');
     const reserve = await resolveAaveReserve('0xUserFalsy', '1:0xMKT1', 'USDC');
     expect(reserve).not.toBeNull();
     expect(reserve!.price).toBe(0);
@@ -628,7 +733,7 @@ describe('Aave V3 client integration', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    const { resolveAaveReserve } = await import('../src/lib/aave-client');
+    const { resolveAaveReserve } = await import('../src/lib/clients/aave');
     
     // Symbol mismatch
     const res1 = await resolveAaveReserve('0xUserNull', '1:0xMKT1', 'USDT');
@@ -640,7 +745,7 @@ describe('Aave V3 client integration', () => {
   });
 
   it('returns null on invalid marketId in resolveAaveReserve', async () => {
-    const { resolveAaveReserve } = await import('../src/lib/aave-client');
+    const { resolveAaveReserve } = await import('../src/lib/clients/aave');
     
     expect(await resolveAaveReserve('0xUser', 'invalidId', 'USDC')).toBeNull();
     expect(await resolveAaveReserve('0xUser', 'abc:0xMKT1', 'USDC')).toBeNull();
@@ -654,7 +759,7 @@ describe('Aave V3 client integration', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    const { loadAavePositions } = await import('../src/lib/aave-client');
+    const { loadAavePositions } = await import('../src/lib/clients/aave');
     await expect(loadAavePositions('0xUserError', [1])).rejects.toThrow('Aave API error: 500');
   });
 
@@ -667,7 +772,7 @@ describe('Aave V3 client integration', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    const { loadAavePositions } = await import('../src/lib/aave-client');
+    const { loadAavePositions } = await import('../src/lib/clients/aave');
     await expect(loadAavePositions('0xUserGraphqlError', [1])).rejects.toThrow('Aave GraphQL error');
   });
 
@@ -681,7 +786,7 @@ describe('Aave V3 client integration', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    const { loadAavePositions } = await import('../src/lib/aave-client');
+    const { loadAavePositions } = await import('../src/lib/clients/aave');
     
     // First call (cache miss)
     await loadAavePositions('0xUserCache', [1]);

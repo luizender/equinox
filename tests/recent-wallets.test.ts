@@ -81,4 +81,14 @@ describe('getRecentWallets / addRecentWallet (persisted)', () => {
     );
     expect(getRecentWallets()).toEqual([{ address: 'A', lastUsedAt: 1 }]);
   });
+
+  it('returns [] when stored JSON is valid but not an array', () => {
+    window.localStorage.setItem('equinox:recent-wallets', JSON.stringify({ not: 'an array' }));
+    expect(getRecentWallets()).toEqual([]);
+  });
+
+  it('returns [] when window is unavailable (server-side render)', () => {
+    vi.stubGlobal('window', undefined);
+    expect(getRecentWallets()).toEqual([]);
+  });
 });

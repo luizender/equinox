@@ -3,19 +3,78 @@
  * All fetch calls use Next.js revalidation for short-lived server-side caching.
  */
 
-import { API_BASE } from './config';
+import { API_BASE } from '../config';
 import type {
-  KaminoPortfolioLoan,
-  KaminoMarketResponse,
-  KaminoLoanDetail,
-  KaminoReserveItem,
-  KaminoReserveMetric,
-  KaminoReserveHistoryResponse,
   PortfolioPosition,
   PortfolioAsset,
   PortfolioBorrowAsset,
   ReserveInfoData,
 } from '@/types';
+
+// --------------------------------------------------------------------------- //
+// Kamino REST API response types (private to this client)
+// --------------------------------------------------------------------------- //
+
+interface KaminoPortfolioLoan {
+  address: string;
+  marketAddress: string;
+}
+
+interface KaminoMarketResponse {
+  name: string;
+}
+
+interface KaminoDeposit {
+  tokenName: string;
+  tokenAmount: string;
+  tokenPrice: string;
+  liquidationLtv: string;
+}
+
+interface KaminoBorrow {
+  tokenName: string;
+  tokenAmount: string;
+  tokenPrice: string;
+  tokenValue: string;
+  borrowFactor: string;
+}
+
+interface KaminoLoanDetail {
+  loanInfo: {
+    collateral: { deposits: KaminoDeposit[] };
+    debt: { borrows: KaminoBorrow[] };
+  };
+}
+
+interface KaminoReserveItem {
+  liquidityToken: string;
+  reserve: string;
+}
+
+/**
+ * Reserve-level supply/borrow rates from the market's reserves/metrics endpoint.
+ * Rates arrive as JSON numbers (decimal fractions, e.g. 0.054 = 5.4%).
+ */
+interface KaminoReserveMetric {
+  liquidityToken: string;
+  reserve: string;
+  supplyApy: number;
+  borrowApy: number;
+}
+
+interface KaminoReserveHistoryMetrics {
+  assetPriceUSD: string;
+  borrowFactor: string;
+  liquidationThreshold: string;
+}
+
+interface KaminoReserveHistoryPoint {
+  metrics?: KaminoReserveHistoryMetrics;
+}
+
+interface KaminoReserveHistoryResponse {
+  history?: KaminoReserveHistoryPoint[];
+}
 
 /** Per-asset supply/borrow APY for a market, keyed by uppercased symbol. */
 type ReserveApyMap = Map<string, { supplyApy: number; borrowApy: number }>;

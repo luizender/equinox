@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { resolveKaminoReserve } from '@/lib/kamino-client';
-import { resolveAaveReserve } from '@/lib/aave-client';
+import { resolveKaminoReserve } from '@/lib/clients/kamino';
+import { resolveAaveReserve } from '@/lib/clients/aave';
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const searchParams = request.nextUrl.searchParams;
