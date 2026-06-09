@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback, useRef, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Position, Collateral, Borrow } from '@/lib/math-engine';
+import { validateAddress } from '@/lib/validation';
+import { addRecentWallet } from '@/lib/recent-wallets';
 import type { PortfolioPosition } from '@/types';
 import DashboardHeader from '@/components/dashboard-header';
 import KpiCards from '@/components/kpi-cards';
@@ -112,6 +114,15 @@ function DashboardContent() {
       cancelled = true;
     };
   }, [address, fetchPortfolio, router]);
+
+  // Remember every valid address that gets visualized so the home screen can
+  // offer it as a recent shortcut. Runs for any entry point (search, direct
+  // link, recent click) since they all flow through this address param.
+  useEffect(() => {
+    if (address && validateAddress(address).isValid) {
+      addRecentWallet(address);
+    }
+  }, [address]);
 
   // Watch mode: poll on a 15s countdown while active; reset the timer on exit.
   useEffect(() => {

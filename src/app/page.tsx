@@ -1,13 +1,58 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useSyncExternalStore } from 'react';
 import { useRouter } from 'next/navigation';
-import { Activity, ShieldAlert, ArrowRight } from 'lucide-react';
+import { Activity, ShieldAlert, ArrowRight, History, ChevronRight } from 'lucide-react';
 import { validateAddress } from '@/lib/validation';
+import { getRecentWallets, type RecentWallet } from '@/lib/recent-wallets';
+
+// Recent wallets come from localStorage (client-only). Read them through
+// useSyncExternalStore so the server/hydration render sees an empty list and
+// the real list resolves on the client without a hydration mismatch.
+const EMPTY_RECENTS: RecentWallet[] = [];
+let recentsCache: RecentWallet[] = EMPTY_RECENTS;
+let recentsCacheKey = '';
+
+function subscribeRecents(onChange: () => void): () => void {
+  window.addEventListener('storage', onChange);
+  return () => window.removeEventListener('storage', onChange);
+}
+
+// getSnapshot must be referentially stable while the data is unchanged, so the
+// freshly-built array is cached and only swapped when its contents differ.
+function recentsSnapshot(): RecentWallet[] {
+  const list = getRecentWallets();
+  const key = JSON.stringify(list);
+  if (key !== recentsCacheKey) {
+    recentsCacheKey = key;
+    recentsCache = list;
+  }
+  return recentsCache;
+}
+
+// Compact "first6…last4" address, leaving short strings untouched.
+function shortenAddress(addr: string): string {
+  return addr.length <= 13 ? addr : `${addr.slice(0, 6)}…${addr.slice(-4)}`;
+}
+
+function timeAgo(ts: number): string {
+  const mins = Math.floor((Date.now() - ts) / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+}
 
 export default function Home() {
   const router = useRouter();
   const [address, setAddress] = useState('');
+
+  const recents = useSyncExternalStore(subscribeRecents, recentsSnapshot, () => EMPTY_RECENTS);
+
+  const openWallet = (addr: string) => {
+    router.push(`/dashboard?address=${encodeURIComponent(addr)}&chain=all`);
+  };
 
   // errorMsg and protocolBadge are pure functions of `address` — derive them
   // during render instead of mirroring `address` into state via an effect.
@@ -91,6 +136,42 @@ export default function Home() {
             </button>
           </form>
         </div>
+
+        {/* Recent wallets — quick links to previously visualized addresses,
+            most-recently-used first. */}
+        {recents.length > 0 && (
+          <div className="bg-glass-card rounded-2xl p-5 border border-slate-800/80 shadow-2xl text-left space-y-3">
+            <div className="flex items-center gap-2 text-slate-400">
+              <History className="w-3.5 h-3.5" />
+              <span className="text-[11px] font-semibold tracking-widest font-mono uppercase">Recent</span>
+            </div>
+            <ul className="space-y-1.5">
+              {recents.map((w) => {
+                const protocol = validateAddress(w.address).protocol;
+                const badge =
+                  protocol === 'kamino'
+                    ? { text: 'Kamino', gradient: 'from-cyan-400 to-purple-500' }
+                    : { text: 'Aave V3', gradient: 'from-blue-500 to-indigo-600' };
+                return (
+                  <li key={w.address}>
+                    <button
+                      type="button"
+                      onClick={() => openWallet(w.address)}
+                      className="w-full group flex items-center gap-3 px-3 py-2.5 rounded-xl bg-slate-950/60 border border-slate-800/60 hover:border-[#00f2fe]/40 hover:bg-slate-900/60 transition-all cursor-pointer"
+                    >
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-semibold text-white bg-gradient-to-r ${badge.gradient}`}>
+                        {badge.text}
+                      </span>
+                      <span className="font-mono text-sm text-slate-200 truncate">{shortenAddress(w.address)}</span>
+                      <span className="ml-auto text-[10px] text-slate-500 font-mono whitespace-nowrap">{timeAgo(w.lastUsedAt)}</span>
+                      <ChevronRight className="w-4 h-4 text-slate-600 group-hover:text-[#00f2fe] transition-colors" />
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
       </div>
     </div>
   );
