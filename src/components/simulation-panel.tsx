@@ -481,7 +481,10 @@ export default function SimulationPanel({
             </div>
             <div className="flex items-center justify-center gap-2 mt-1">
               <span className="text-lg font-semibold font-sans tabular-nums text-slate-500">
-                {position.healthFactor === Infinity ? '∞' : position.healthFactor.toFixed(2)}
+                {(() => {
+                  const baseHf = position.reportedHealthFactor ?? position.healthFactor;
+                  return baseHf === Infinity ? '∞' : baseHf.toFixed(2);
+                })()}
               </span>
               <ArrowRight className="w-4 h-4 text-slate-500" />
               <span className={`text-4xl font-extrabold font-sans tabular-nums tracking-tight ${

@@ -42,6 +42,17 @@ export interface KaminoReserveItem {
   reserve: string;
 }
 
+/**
+ * Reserve-level supply/borrow rates from the market's reserves/metrics endpoint.
+ * Rates arrive as JSON numbers (decimal fractions, e.g. 0.054 = 5.4%).
+ */
+export interface KaminoReserveMetric {
+  liquidityToken: string;
+  reserve: string;
+  supplyApy: number;
+  borrowApy: number;
+}
+
 export interface KaminoReserveHistoryMetrics {
   assetPriceUSD: string;
   borrowFactor: string;
@@ -79,6 +90,7 @@ export interface AaveSupply {
   market: { address: string; chain: { chainId: number } };
   currency: { symbol: string; address: string };
   balance: { amount: { value: string }; usdPerToken: string; usd: string };
+  apy: { value: string };
   isCollateral: boolean;
 }
 
@@ -86,6 +98,17 @@ export interface AaveBorrow {
   market: { address: string; chain: { chainId: number } };
   currency: { symbol: string; address: string };
   debt: { amount: { value: string }; usdPerToken: string; usd: string };
+  apy: { value: string };
+}
+
+/**
+ * Per-user, per-market state. Aave computes this directly, so it already folds
+ * in incentive rewards and non-collateral supplies. Only reliable when the
+ * market is queried for a single chain (multi-chain requests zero it out).
+ */
+export interface AaveUserState {
+  netAPY: { value: string } | null;
+  healthFactor: string | null;
 }
 
 // --------------------------------------------------------------------------- //
@@ -99,6 +122,10 @@ export interface PortfolioPosition {
   collateral: PortfolioAsset[];
   borrows: PortfolioBorrowAsset[];
   debtValue: number;
+  // Protocol-reported live figures, when the source exposes them (Aave). Null
+  // for sources that don't (Kamino), where the client computes from rates.
+  netApy: number | null;
+  healthFactor: number | null;
 }
 
 export interface PortfolioAsset {
@@ -106,6 +133,7 @@ export interface PortfolioAsset {
   amount: number;
   price: number;
   liquidationThreshold: number;
+  supplyApy: number;
 }
 
 export interface PortfolioBorrowAsset {
@@ -113,6 +141,7 @@ export interface PortfolioBorrowAsset {
   amount: number;
   price: number;
   borrowFactor: number;
+  borrowApy: number;
 }
 
 export interface PortfolioResponse {

@@ -20,12 +20,21 @@ import Link from 'next/link';
 function parsePositions(rawPositions: PortfolioPosition[]): Position[] {
   return rawPositions.map((p) => {
     const colList = p.collateral.map(
-      (c) => new Collateral(c.symbol, c.amount, c.price, c.liquidationThreshold)
+      (c) => new Collateral(c.symbol, c.amount, c.price, c.liquidationThreshold, c.supplyApy)
     );
     const borList = p.borrows.map(
-      (b) => new Borrow(b.symbol, b.amount, b.price, b.borrowFactor)
+      (b) => new Borrow(b.symbol, b.amount, b.price, b.borrowFactor, b.borrowApy)
     );
-    return new Position(p.marketName, p.address, colList, borList, p.debtValue, p.marketId);
+    return new Position(
+      p.marketName,
+      p.address,
+      colList,
+      borList,
+      p.debtValue,
+      p.marketId,
+      p.netApy,
+      p.healthFactor
+    );
   });
 }
 

@@ -65,6 +65,11 @@ describe('Kamino response parsing', () => {
     },
   };
 
+  const mockKaminoReserveMetrics = [
+    { liquidityToken: 'JupSOL', reserve: 'RSV_JUPSOL', supplyApy: 0.07, borrowApy: 0.09 },
+    { liquidityToken: 'PYUSD', reserve: 'RSV_PYUSD', supplyApy: 0.05, borrowApy: 0.08 },
+  ];
+
   beforeEach(() => {
     vi.restoreAllMocks();
   });
@@ -87,6 +92,12 @@ describe('Kamino response parsing', () => {
       json: async () => ({ name: 'Main Market' }),
     });
 
+    // Reserve metrics (per-asset supply/borrow APY)
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => mockKaminoReserveMetrics,
+    });
+
     // Loan detail
     fetchMock.mockResolvedValueOnce({
       ok: true,
@@ -103,6 +114,9 @@ describe('Kamino response parsing', () => {
     expect(pos.marketName).toBe('Main Market');
     expect(pos.address).toBe('OBL1');
     expect(pos.marketId).toBe('MKT1');
+    // Kamino reports neither a net APY nor a health factor.
+    expect(pos.netApy).toBeNull();
+    expect(pos.healthFactor).toBeNull();
 
     // Collateral
     expect(pos.collateral).toHaveLength(1);
@@ -110,11 +124,13 @@ describe('Kamino response parsing', () => {
     expect(pos.collateral[0].amount).toBeCloseTo(57543.3696);
     expect(pos.collateral[0].price).toBeCloseTo(80.71);
     expect(pos.collateral[0].liquidationThreshold).toBeCloseTo(0.6);
+    expect(pos.collateral[0].supplyApy).toBeCloseTo(0.07);
 
     // Borrows
     expect(pos.borrows).toHaveLength(1);
     expect(pos.borrows[0].symbol).toBe('PYUSD');
     expect(pos.borrows[0].amount).toBeCloseTo(2042156.91);
+    expect(pos.borrows[0].borrowApy).toBeCloseTo(0.08);
 
     // Debt value = tokenValue * borrowFactor = 2041983.60 * 1.0
     expect(pos.debtValue).toBeCloseTo(2041983.6);
@@ -179,6 +195,12 @@ describe('Kamino response parsing', () => {
       json: async () => ({ name: 'Main Market' }),
     });
 
+    // Reserve metrics - also cached per market, called ONCE
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => mockKaminoReserveMetrics,
+    });
+
     // Loan detail for OBL1
     fetchMock.mockResolvedValueOnce({
       ok: true,
@@ -199,7 +221,8 @@ describe('Kamino response parsing', () => {
     expect(positions).toHaveLength(2);
     expect(positions[0].marketName).toBe('Main Market');
     expect(positions[1].marketName).toBe('Main Market');
-    expect(fetchMock).toHaveBeenCalledTimes(4);
+    // portfolio + market metadata + reserve metrics + 2 loan details
+    expect(fetchMock).toHaveBeenCalledTimes(5);
   });
 });
 
@@ -408,18 +431,21 @@ describe('Aave V3 client integration', () => {
               market: { address: '0xMKT1', chain: { chainId: 1 } },
               currency: { symbol: 'USDC', address: '0xUSDC' },
               balance: { amount: { value: '1000' }, usdPerToken: '1.0', usd: '1000' },
+              apy: { value: '0.03' },
               isCollateral: true,
             },
             {
               market: { address: '0xMKT1', chain: { chainId: 1 } },
               currency: { symbol: 'USDT', address: '0xUSDT' },
               balance: { amount: { value: '500' }, usdPerToken: '1.0', usd: '500' },
+              apy: { value: '0.04' },
               isCollateral: false,
             },
             {
               market: { address: '0xMKT1', chain: { chainId: 1 } },
               currency: { symbol: 'DAI', address: '0xDAI' },
               balance: { amount: { value: '200' }, usdPerToken: '1.0', usd: '200' },
+              apy: { value: '0.025' },
               isCollateral: true, // Not in reserves, will hit ?? 0 fallback
             },
           ],
@@ -428,6 +454,22 @@ describe('Aave V3 client integration', () => {
               market: { address: '0xMKT1', chain: { chainId: 1 } },
               currency: { symbol: 'USDT', address: '0xUSDT' },
               debt: { amount: { value: '300' }, usdPerToken: '1.0', usd: '300' },
+              apy: { value: '0.06' },
+            },
+          ],
+        },
+      }),
+    });
+
+    // 3. User-state response (queried per chain for net APY / health factor)
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        data: {
+          markets: [
+            {
+              address: '0xMKT1',
+              userState: { netAPY: { value: '-0.015' }, healthFactor: '1.85' },
             },
           ],
         },
@@ -445,22 +487,29 @@ describe('Aave V3 client integration', () => {
     expect(pos.marketId).toBe('1:0xMKT1');
     expect(pos.address).toBe('0xMKT1');
 
+    // Net APY and health factor come straight from Aave's userState.
+    expect(pos.netApy).toBe(-0.015);
+    expect(pos.healthFactor).toBe(1.85);
+
     expect(pos.collateral).toHaveLength(2);
     expect(pos.collateral[0].symbol).toBe('USDC');
     expect(pos.collateral[0].amount).toBe(1000);
     expect(pos.collateral[0].price).toBe(1.0);
     expect(pos.collateral[0].liquidationThreshold).toBe(0.8);
+    expect(pos.collateral[0].supplyApy).toBe(0.03);
 
     expect(pos.collateral[1].symbol).toBe('DAI');
     expect(pos.collateral[1].amount).toBe(200);
     expect(pos.collateral[1].price).toBe(1.0);
     expect(pos.collateral[1].liquidationThreshold).toBe(0);
+    expect(pos.collateral[1].supplyApy).toBe(0.025);
 
     expect(pos.borrows).toHaveLength(1);
     expect(pos.borrows[0].symbol).toBe('USDT');
     expect(pos.borrows[0].amount).toBe(300);
     expect(pos.borrows[0].price).toBe(1.0);
     expect(pos.borrows[0].borrowFactor).toBe(1.0);
+    expect(pos.borrows[0].borrowApy).toBe(0.06);
     expect(pos.debtValue).toBe(300);
   });
 
