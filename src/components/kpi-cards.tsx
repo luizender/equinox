@@ -3,49 +3,22 @@
 import { ArrowDownRight, ArrowUpRight, DollarSign, Percent } from 'lucide-react';
 import { Position } from '@/lib/math-engine';
 
-// Mock APY configuration for calculating simulated Net APY
-const MOCK_DEPOSIT_APY: Record<string, number> = {
-  SOL: 0.065,
-  JUPSOL: 0.078,
-  BSOL: 0.071,
-  MSOL: 0.068,
-  USDC: 0.082,
-  USDT: 0.085,
-  PYUSD: 0.079,
-  ETH: 0.032,
-  WETH: 0.032,
-  WBTC: 0.005,
-  BTC: 0.005,
-  DAI: 0.055,
-  GHO: 0.051,
-  DEFAULT: 0.03,
-};
+// Net-worth-weighted average of the protocol-reported net APY across positions
+// that expose one (Aave). Returns null when none do (e.g. Kamino), so the
+// caller computes from per-asset rates instead.
+function reportedNetApy(posList: Position[]): number | null {
+  const withReported = posList.filter((p) => p.reportedNetApy != null);
+  if (withReported.length === 0) return null;
 
-const MOCK_BORROW_APY: Record<string, number> = {
-  SOL: 0.091,
-  JUPSOL: 0.098,
-  BSOL: 0.095,
-  MSOL: 0.094,
-  USDC: 0.105,
-  USDT: 0.108,
-  PYUSD: 0.099,
-  ETH: 0.045,
-  WETH: 0.045,
-  WBTC: 0.018,
-  BTC: 0.018,
-  DAI: 0.072,
-  GHO: 0.063,
-  DEFAULT: 0.05,
-};
-
-function getDepositApy(symbol: string): number {
-  const sym = symbol.toUpperCase();
-  return MOCK_DEPOSIT_APY[sym] ?? MOCK_DEPOSIT_APY.DEFAULT;
-}
-
-function getBorrowApy(symbol: string): number {
-  const sym = symbol.toUpperCase();
-  return MOCK_BORROW_APY[sym] ?? MOCK_BORROW_APY.DEFAULT;
+  let weightedSum = 0;
+  let weightTotal = 0;
+  for (const p of withReported) {
+    const borrowValue = p.borrows.reduce((sum, b) => sum + b.value, 0);
+    const weight = p.depositValue - borrowValue;
+    weightedSum += (p.reportedNetApy as number) * weight;
+    weightTotal += weight;
+  }
+  return weightTotal !== 0 ? weightedSum / weightTotal : (withReported[0].reportedNetApy as number);
 }
 
 interface KpiCardsProps {
@@ -61,26 +34,33 @@ export default function KpiCards({ positions, simulatedPositions, isSimulating }
     let totalDebt = 0;
     let weightedDepositYield = 0;
     let weightedBorrowCost = 0;
+    let borrowValue = 0; // actual (unadjusted) borrow value, for APY math
 
     posList.forEach((pos) => {
       pos.collateral.forEach((c) => {
         const val = c.value;
         totalCollateral += val;
-        weightedDepositYield += val * getDepositApy(c.symbol);
+        weightedDepositYield += val * c.supplyApy;
       });
       pos.borrows.forEach((b) => {
         const val = b.value;
-        weightedBorrowCost += val * getBorrowApy(b.symbol);
+        weightedBorrowCost += val * b.borrowApy;
+        borrowValue += val;
       });
       totalDebt += pos.debtValue;
     });
 
     const netWorth = totalCollateral - totalDebt;
     const depositApy = totalCollateral > 0 ? weightedDepositYield / totalCollateral : 0;
-    const borrowApy = totalDebt > 0 ? weightedBorrowCost / totalDebt : 0;
-    
-    // Net APY = (Yield USD - Cost USD) / Net Worth
-    const netApy = netWorth > 0 ? (weightedDepositYield - weightedBorrowCost) / netWorth : 0;
+    const borrowApy = borrowValue > 0 ? weightedBorrowCost / borrowValue : 0;
+
+    // Net APY = (Yield USD - Cost USD) / Net Worth, using actual borrow value so
+    // borrow factors don't distort the denominator. Prefer the protocol-reported
+    // figure when present (exact, and folds in incentives); otherwise compute it.
+    const apyNetWorth = totalCollateral - borrowValue;
+    const computedNetApy =
+      apyNetWorth !== 0 ? (weightedDepositYield - weightedBorrowCost) / apyNetWorth : 0;
+    const netApy = reportedNetApy(posList) ?? computedNetApy;
 
     return { totalCollateral, totalDebt, netWorth, netApy, depositApy, borrowApy };
   };

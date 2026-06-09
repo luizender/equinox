@@ -11,8 +11,9 @@ export default defineConfig({
       include: [
         'src/lib/math-engine.ts',
         'src/lib/validation.ts',
-        'src/lib/kamino-client.ts',
-        'src/lib/aave-client.ts',
+        'src/lib/recent-wallets.ts',
+        'src/lib/clients/kamino.ts',
+        'src/lib/clients/aave.ts',
       ],
       thresholds: {
         lines: 100,

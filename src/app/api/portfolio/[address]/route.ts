@@ -10,8 +10,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { validateAddress } from '@/lib/validation';
-import { loadKaminoPositions } from '@/lib/kamino-client';
-import { loadAavePositions, resolveChainIds } from '@/lib/aave-client';
+import { loadKaminoPositions } from '@/lib/clients/kamino';
+import { loadAavePositions, resolveChainIds } from '@/lib/clients/aave';
 import type { PortfolioResponse } from '@/types';
 
 export async function GET(

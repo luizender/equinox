@@ -4,12 +4,8 @@
  * since fetch POST requests cannot use Next.js revalidation.
  */
 
-import { AAVE_API, AAVE_CHAINS } from './config';
+import { AAVE_API, AAVE_CHAINS } from '../config';
 import type {
-  AaveMarket,
-  AaveReserve,
-  AaveSupply,
-  AaveBorrow,
   PortfolioPosition,
   PortfolioAsset,
   PortfolioBorrowAsset,
@@ -18,6 +14,50 @@ import type {
 
 const USER_AGENT = 'equinox/0.1';
 const CACHE_TTL_MS = 15_000;
+
+// --------------------------------------------------------------------------- //
+// Aave GraphQL API response types (private to this client)
+// --------------------------------------------------------------------------- //
+
+interface AaveMarket {
+  address: string;
+  name: string;
+  chain: { chainId: number };
+  userState: { healthFactor: number; eModeEnabled: boolean } | null;
+  reserves: AaveReserve[];
+}
+
+interface AaveReserve {
+  underlyingToken: { symbol: string; address: string };
+  supplyInfo: { liquidationThreshold: { value: string } };
+  userState: { emode: { liquidationThreshold: { value: string } } | null } | null;
+  usdExchangeRate: string;
+}
+
+interface AaveSupply {
+  market: { address: string; chain: { chainId: number } };
+  currency: { symbol: string; address: string };
+  balance: { amount: { value: string }; usdPerToken: string; usd: string };
+  apy: { value: string };
+  isCollateral: boolean;
+}
+
+interface AaveBorrow {
+  market: { address: string; chain: { chainId: number } };
+  currency: { symbol: string; address: string };
+  debt: { amount: { value: string }; usdPerToken: string; usd: string };
+  apy: { value: string };
+}
+
+/**
+ * Per-user, per-market state. Aave computes this directly, so it already folds
+ * in incentive rewards and non-collateral supplies. Only reliable when the
+ * market is queried for a single chain (multi-chain requests zero it out).
+ */
+interface AaveUserState {
+  netAPY: { value: string } | null;
+  healthFactor: string | null;
+}
 
 // --------------------------------------------------------------------------- //
 // GraphQL queries (matching lend-liq's Python implementation)
@@ -46,12 +86,24 @@ const POSITIONS_QUERY = `query Positions(
     market { address chain { chainId } }
     currency { symbol address }
     balance { amount { value } usdPerToken usd }
+    apy { value }
     isCollateral
   }
   userBorrows(request: $borrows) {
     market { address chain { chainId } }
     currency { symbol address }
     debt { amount { value } usdPerToken usd }
+    apy { value }
+  }
+}`;
+
+// Aave computes the displayed net APY and health factor per user per market.
+// Must be queried one chain at a time: a multi-chain request returns valid
+// userState only for the first chain and zeroes out the rest.
+const USER_STATE_QUERY = `query UserState($req: MarketsRequest!) {
+  markets(request: $req) {
+    address
+    userState { netAPY { value } healthFactor }
   }
 }`;
 
@@ -197,10 +249,45 @@ export async function loadAavePositions(
       collateral,
       borrows: debt,
       debtValue,
+      netApy: null,
+      healthFactor: null,
     });
   }
 
+  // Enrich each position with Aave's own net APY / health factor. Queried one
+  // chain at a time because multi-chain userState is unreliable (see query).
+  await Promise.all(
+    positions.map(async (p) => {
+      const [chainStr, marketAddress] = p.marketId.split(':');
+      const state = await fetchUserState(user, parseInt(chainStr, 10), marketAddress);
+      p.netApy = state.netApy;
+      p.healthFactor = state.healthFactor;
+    })
+  );
+
   return positions;
+}
+
+/**
+ * Fetch Aave's computed net APY and health factor for one user in one market.
+ */
+async function fetchUserState(
+  user: string,
+  chainId: number,
+  marketAddress: string
+): Promise<{ netApy: number | null; healthFactor: number | null }> {
+  const data = await graphql<{ markets: { address: string; userState: AaveUserState | null }[] }>(
+    USER_STATE_QUERY,
+    { req: { chainIds: [chainId], user } }
+  );
+  const match = data.markets.find(
+    (m) => m.address.toLowerCase() === marketAddress.toLowerCase()
+  );
+  const state = match?.userState;
+  return {
+    netApy: state?.netAPY ? parseFloat(state.netAPY.value) : null,
+    healthFactor: state?.healthFactor != null ? parseFloat(state.healthFactor) : null,
+  };
 }
 
 /**
@@ -290,6 +377,7 @@ function buildCollateral(
         amount: parseFloat(s.balance.amount.value),
         price: parseFloat(s.balance.usdPerToken),
         liquidationThreshold: thresholds.get(key) ?? 0,
+        supplyApy: parseFloat(s.apy.value),
       };
     });
 }
@@ -300,5 +388,6 @@ function buildBorrow(b: AaveBorrow): PortfolioBorrowAsset {
     amount: parseFloat(b.debt.amount.value),
     price: parseFloat(b.debt.usdPerToken),
     borrowFactor: 1.0, // Aave has no borrow factor
+    borrowApy: parseFloat(b.apy.value),
   };
 }

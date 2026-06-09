@@ -1,96 +1,9 @@
 /**
- * Shared TypeScript interfaces for API responses and parsed portfolio data.
+ * Shared domain contract: the unified portfolio shape produced by the API
+ * route and consumed across clients, routes, and the dashboard.
+ *
+ * Raw provider response types live next to their client in src/lib/clients/.
  */
-
-// --------------------------------------------------------------------------- //
-// Kamino REST API response types
-// --------------------------------------------------------------------------- //
-
-export interface KaminoPortfolioLoan {
-  address: string;
-  marketAddress: string;
-}
-
-export interface KaminoMarketResponse {
-  name: string;
-}
-
-export interface KaminoDeposit {
-  tokenName: string;
-  tokenAmount: string;
-  tokenPrice: string;
-  liquidationLtv: string;
-}
-
-export interface KaminoBorrow {
-  tokenName: string;
-  tokenAmount: string;
-  tokenPrice: string;
-  tokenValue: string;
-  borrowFactor: string;
-}
-
-export interface KaminoLoanDetail {
-  loanInfo: {
-    collateral: { deposits: KaminoDeposit[] };
-    debt: { borrows: KaminoBorrow[] };
-  };
-}
-
-export interface KaminoReserveItem {
-  liquidityToken: string;
-  reserve: string;
-}
-
-export interface KaminoReserveHistoryMetrics {
-  assetPriceUSD: string;
-  borrowFactor: string;
-  liquidationThreshold: string;
-}
-
-export interface KaminoReserveHistoryPoint {
-  metrics?: KaminoReserveHistoryMetrics;
-}
-
-export interface KaminoReserveHistoryResponse {
-  history?: KaminoReserveHistoryPoint[];
-}
-
-// --------------------------------------------------------------------------- //
-// Aave GraphQL API response types
-// --------------------------------------------------------------------------- //
-
-export interface AaveMarket {
-  address: string;
-  name: string;
-  chain: { chainId: number };
-  userState: { healthFactor: number; eModeEnabled: boolean } | null;
-  reserves: AaveReserve[];
-}
-
-export interface AaveReserve {
-  underlyingToken: { symbol: string; address: string };
-  supplyInfo: { liquidationThreshold: { value: string } };
-  userState: { emode: { liquidationThreshold: { value: string } } | null } | null;
-  usdExchangeRate: string;
-}
-
-export interface AaveSupply {
-  market: { address: string; chain: { chainId: number } };
-  currency: { symbol: string; address: string };
-  balance: { amount: { value: string }; usdPerToken: string; usd: string };
-  isCollateral: boolean;
-}
-
-export interface AaveBorrow {
-  market: { address: string; chain: { chainId: number } };
-  currency: { symbol: string; address: string };
-  debt: { amount: { value: string }; usdPerToken: string; usd: string };
-}
-
-// --------------------------------------------------------------------------- //
-// Unified portfolio response sent from the API route to the client
-// --------------------------------------------------------------------------- //
 
 export interface PortfolioPosition {
   marketName: string;
@@ -99,6 +12,10 @@ export interface PortfolioPosition {
   collateral: PortfolioAsset[];
   borrows: PortfolioBorrowAsset[];
   debtValue: number;
+  // Protocol-reported live figures, when the source exposes them (Aave). Null
+  // for sources that don't (Kamino), where the client computes from rates.
+  netApy: number | null;
+  healthFactor: number | null;
 }
 
 export interface PortfolioAsset {
@@ -106,6 +23,7 @@ export interface PortfolioAsset {
   amount: number;
   price: number;
   liquidationThreshold: number;
+  supplyApy: number;
 }
 
 export interface PortfolioBorrowAsset {
@@ -113,6 +31,7 @@ export interface PortfolioBorrowAsset {
   amount: number;
   price: number;
   borrowFactor: number;
+  borrowApy: number;
 }
 
 export interface PortfolioResponse {

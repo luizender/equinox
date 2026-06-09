@@ -60,7 +60,9 @@ function getTier(hf: number, hasDebt: boolean) {
 export default function HealthFactorHero({ position }: HealthFactorHeroProps) {
   if (!position) return null;
 
-  const hf = position.healthFactor;
+  // Prefer the protocol-reported health factor (Aave) for the live view; fall
+  // back to the locally computed value (Kamino, and all simulated positions).
+  const hf = position.reportedHealthFactor ?? position.healthFactor;
   const tier = getTier(hf, position.hasDebt);
   const { Icon } = tier;
 

@@ -8,12 +8,20 @@ export class Collateral {
   readonly amount: number;
   readonly price: number;
   readonly liquidationThreshold: number;
+  readonly supplyApy: number;
 
-  constructor(symbol: string, amount: number, price: number, liquidationThreshold: number) {
+  constructor(
+    symbol: string,
+    amount: number,
+    price: number,
+    liquidationThreshold: number,
+    supplyApy: number = 0
+  ) {
     this.symbol = symbol;
     this.amount = amount;
     this.price = price;
     this.liquidationThreshold = liquidationThreshold;
+    this.supplyApy = supplyApy;
   }
 
   /**
@@ -46,12 +54,20 @@ export class Borrow {
   readonly amount: number;
   readonly price: number;
   readonly borrowFactor: number;
+  readonly borrowApy: number;
 
-  constructor(symbol: string, amount: number, price: number, borrowFactor: number = 1.0) {
+  constructor(
+    symbol: string,
+    amount: number,
+    price: number,
+    borrowFactor: number = 1.0,
+    borrowApy: number = 0
+  ) {
     this.symbol = symbol;
     this.amount = amount;
     this.price = price;
     this.borrowFactor = borrowFactor;
+    this.borrowApy = borrowApy;
   }
 
   /**
@@ -79,6 +95,11 @@ export class Position {
   readonly borrows: Borrow[];
   readonly debtValue: number; // Kamino's adjusted debt value, or sum of Aave borrows
   readonly marketId: string;
+  // Protocol-reported live figures, when available (Aave). Null on simulated
+  // positions and on sources that don't report them, so callers fall back to
+  // the computed values.
+  readonly reportedNetApy: number | null;
+  readonly reportedHealthFactor: number | null;
 
   constructor(
     marketName: string,
@@ -86,7 +107,9 @@ export class Position {
     collateral: Collateral[],
     borrows: Borrow[],
     debtValue: number,
-    marketId: string = ''
+    marketId: string = '',
+    reportedNetApy: number | null = null,
+    reportedHealthFactor: number | null = null
   ) {
     this.marketName = marketName;
     this.address = address;
@@ -94,6 +117,8 @@ export class Position {
     this.borrows = borrows;
     this.debtValue = debtValue;
     this.marketId = marketId;
+    this.reportedNetApy = reportedNetApy;
+    this.reportedHealthFactor = reportedHealthFactor;
   }
 
   /**
@@ -293,7 +318,7 @@ export function applyOverrides(position: Position, changes: Changes): Position {
     if (collateralAmounts[sym] !== undefined) {
       amount = collateralAmounts[sym].appliedTo(amount);
     }
-    return new Collateral(c.symbol, amount, price, c.liquidationThreshold);
+    return new Collateral(c.symbol, amount, price, c.liquidationThreshold, c.supplyApy);
   };
 
   const overrideBorrow = (b: Borrow): Borrow => {
@@ -303,19 +328,19 @@ export function applyOverrides(position: Position, changes: Changes): Position {
     if (borrowAmounts[sym] !== undefined) {
       amount = borrowAmounts[sym].appliedTo(amount);
     }
-    return new Borrow(b.symbol, amount, price, b.borrowFactor);
+    return new Borrow(b.symbol, amount, price, b.borrowFactor, b.borrowApy);
   };
 
   const priceCollateral = (c: Collateral): Collateral => {
     const sym = c.symbol.toUpperCase();
     const price = prices[sym] !== undefined ? prices[sym] : c.price;
-    return new Collateral(c.symbol, c.amount, price, c.liquidationThreshold);
+    return new Collateral(c.symbol, c.amount, price, c.liquidationThreshold, c.supplyApy);
   };
 
   const priceBorrow = (b: Borrow): Borrow => {
     const sym = b.symbol.toUpperCase();
     const price = prices[sym] !== undefined ? prices[sym] : b.price;
-    return new Borrow(b.symbol, b.amount, price, b.borrowFactor);
+    return new Borrow(b.symbol, b.amount, price, b.borrowFactor, b.borrowApy);
   };
 
   // Apply overrides to existing collateral
