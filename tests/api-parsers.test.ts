@@ -39,30 +39,27 @@ describe('resolveChainIds', () => {
 // --------------------------------------------------------------------------- //
 
 describe('Kamino response parsing', () => {
-  const mockKaminoLoanDetail = {
-    loanInfo: {
-      collateral: {
-        deposits: [
-          {
-            tokenName: 'JupSOL',
-            tokenAmount: '57543.3696',
-            tokenPrice: '80.71',
-            liquidationLtv: '0.60',
-          },
-        ],
+  // Portfolio response: deposits and borrows are inlined per loan.
+  const mockKaminoLoan = {
+    obligation: 'OBL1',
+    market: 'MKT1',
+    deposits: [
+      {
+        symbol: 'JupSOL',
+        amount: '57543.3696',
+        price: '80.71',
+        liquidationLtv: '0.60',
       },
-      debt: {
-        borrows: [
-          {
-            tokenName: 'PYUSD',
-            tokenAmount: '2042156.91',
-            tokenPrice: '1.00',
-            tokenValue: '2041983.60',
-            borrowFactor: '1.0',
-          },
-        ],
+    ],
+    borrows: [
+      {
+        symbol: 'PYUSD',
+        amount: '2042156.91',
+        price: '1.00',
+        value: '2041983.60',
+        borrowFactor: '1.0',
       },
-    },
+    ],
   };
 
   const mockKaminoReserveMetrics = [
@@ -75,15 +72,12 @@ describe('Kamino response parsing', () => {
   });
 
   it('parses Kamino loan detail into a PortfolioPosition', async () => {
-    // Mock fetch to return canned responses
     const fetchMock = vi.fn();
 
-    // Portfolio response
+    // Portfolio response — deposits and borrows inline
     fetchMock.mockResolvedValueOnce({
       ok: true,
-      json: async () => ({
-        lending: [{ address: 'OBL1', marketAddress: 'MKT1' }],
-      }),
+      json: async () => ({ lending: [mockKaminoLoan] }),
     });
 
     // Market metadata
@@ -96,12 +90,6 @@ describe('Kamino response parsing', () => {
     fetchMock.mockResolvedValueOnce({
       ok: true,
       json: async () => mockKaminoReserveMetrics,
-    });
-
-    // Loan detail
-    fetchMock.mockResolvedValueOnce({
-      ok: true,
-      json: async () => mockKaminoLoanDetail,
     });
 
     vi.stubGlobal('fetch', fetchMock);
@@ -132,17 +120,17 @@ describe('Kamino response parsing', () => {
     expect(pos.borrows[0].amount).toBeCloseTo(2042156.91);
     expect(pos.borrows[0].borrowApy).toBeCloseTo(0.08);
 
-    // Debt value = tokenValue * borrowFactor = 2041983.60 * 1.0
+    // Debt value = value * borrowFactor = 2041983.60 * 1.0
     expect(pos.debtValue).toBeCloseTo(2041983.6);
   });
 
   it('falls back to zero APY when reserve metrics are falsy or the token is absent', async () => {
     const fetchMock = vi.fn();
 
-    // Portfolio response
+    // Portfolio with a loan whose symbols don't appear in the reserve metrics
     fetchMock.mockResolvedValueOnce({
       ok: true,
-      json: async () => ({ lending: [{ address: 'OBL1', marketAddress: 'MKT1' }] }),
+      json: async () => ({ lending: [mockKaminoLoan] }),
     });
 
     // Market metadata
@@ -151,19 +139,13 @@ describe('Kamino response parsing', () => {
       json: async () => ({ name: 'Main Market' }),
     });
 
-    // Reserve metrics with falsy APYs -> Number(x) || 0 fallback, and a token
-    // that none of the loan's assets reference -> apyMap.get(...) ?? 0 fallback.
+    // Reserve metrics with falsy APYs and a token that none of the loan's
+    // assets reference → apyMap.get(...) ?? 0 fallback.
     fetchMock.mockResolvedValueOnce({
       ok: true,
       json: async () => [
         { liquidityToken: 'OTHER', reserve: 'RSV_OTHER', supplyApy: 0, borrowApy: 0 },
       ],
-    });
-
-    // Loan detail referencing assets absent from the reserve metrics
-    fetchMock.mockResolvedValueOnce({
-      ok: true,
-      json: async () => mockKaminoLoanDetail,
     });
 
     vi.stubGlobal('fetch', fetchMock);
@@ -208,6 +190,7 @@ describe('Kamino response parsing', () => {
       ok: false,
       status: 500,
       statusText: 'Internal Server Error',
+      text: () => Promise.reject(new Error('body unreadable')),
     });
     vi.stubGlobal('fetch', fetchMock);
 
@@ -215,18 +198,16 @@ describe('Kamino response parsing', () => {
     await expect(loadKaminoPositions('BadWallet')).rejects.toThrow('Kamino API error');
   });
 
-  it('reuses market name from cache when multiple loans have the same marketAddress', async () => {
+  it('reuses market name from cache when multiple loans have the same market', async () => {
     const fetchMock = vi.fn();
+
+    const loan1 = { ...mockKaminoLoan, obligation: 'OBL1' };
+    const loan2 = { ...mockKaminoLoan, obligation: 'OBL2' };
 
     // Portfolio response with two loans on the same market
     fetchMock.mockResolvedValueOnce({
       ok: true,
-      json: async () => ({
-        lending: [
-          { address: 'OBL1', marketAddress: 'MKT1' },
-          { address: 'OBL2', marketAddress: 'MKT1' },
-        ],
-      }),
+      json: async () => ({ lending: [loan1, loan2] }),
     });
 
     // Market metadata - should only be called ONCE
@@ -241,18 +222,6 @@ describe('Kamino response parsing', () => {
       json: async () => mockKaminoReserveMetrics,
     });
 
-    // Loan detail for OBL1
-    fetchMock.mockResolvedValueOnce({
-      ok: true,
-      json: async () => mockKaminoLoanDetail,
-    });
-
-    // Loan detail for OBL2
-    fetchMock.mockResolvedValueOnce({
-      ok: true,
-      json: async () => mockKaminoLoanDetail,
-    });
-
     vi.stubGlobal('fetch', fetchMock);
 
     const { loadKaminoPositions } = await import('../src/lib/clients/kamino');
@@ -261,8 +230,8 @@ describe('Kamino response parsing', () => {
     expect(positions).toHaveLength(2);
     expect(positions[0].marketName).toBe('Main Market');
     expect(positions[1].marketName).toBe('Main Market');
-    // portfolio + market metadata + reserve metrics + 2 loan details
-    expect(fetchMock).toHaveBeenCalledTimes(5);
+    // portfolio + market metadata + reserve metrics (no per-loan detail fetch)
+    expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 });
 

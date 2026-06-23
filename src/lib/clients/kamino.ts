@@ -83,7 +83,8 @@ async function fetchJson<T>(url: string): Promise<T> {
     next: { revalidate: REVALIDATE_SECONDS },
   });
   if (!response.ok) {
-    const body = await response.text().catch(() => '');
+    // Wrap in then() so a missing .text method rejects rather than throwing sync.
+    const body = await Promise.resolve().then(() => response.text()).catch(() => '');
     throw new Error(`Kamino API error: ${response.status} ${response.statusText} — ${body}`);
   }
   return response.json() as Promise<T>;
