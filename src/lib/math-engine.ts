@@ -345,13 +345,13 @@ export function applyOverrides(position: Position, changes: Changes): Position {
 
   // Apply overrides to existing collateral
   let collateral = position.collateral.map(overrideCollateral);
-  // Append newly added collateral (with prices overridden if present)
-  collateral = [...collateral, ...addCollateral.map(priceCollateral)];
+  // Append newly added collateral with amount + price overrides applied
+  collateral = [...collateral, ...addCollateral.map(overrideCollateral)];
 
   // Apply overrides to existing borrows
   const existingBorrows = position.borrows.map(overrideBorrow);
-  // Append newly added borrows (with prices overridden if present)
-  const addedBorrows = addBorrows.map(priceBorrow);
+  // Append newly added borrows with amount + price overrides applied
+  const addedBorrows = addBorrows.map(overrideBorrow);
   const borrows = [...existingBorrows, ...addedBorrows];
 
   // Debt calculation

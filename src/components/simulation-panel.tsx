@@ -373,12 +373,12 @@ export default function SimulationPanel({
             
             <div className="flex items-center gap-3">
               {/* Slider */}
-              <div className="flex-1 px-1">
+              <div className="flex-1 px-1 min-w-0">
                 <Slider
                   min={minAmountSlider}
                   max={maxAmountSlider}
                   step={maxAmountSlider / 100}
-                  value={[amountVal]}
+                  value={[Math.min(Math.max(amountVal, minAmountSlider), maxAmountSlider)]}
                   onValueChange={(val) => {
                     const num = Array.isArray(val) ? val[0] : val;
                     handleAmountChange(symbol, type, num, isDelta, originalAmount);
