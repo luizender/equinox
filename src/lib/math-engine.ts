@@ -331,27 +331,15 @@ export function applyOverrides(position: Position, changes: Changes): Position {
     return new Borrow(b.symbol, amount, price, b.borrowFactor, b.borrowApy);
   };
 
-  const priceCollateral = (c: Collateral): Collateral => {
-    const sym = c.symbol.toUpperCase();
-    const price = prices[sym] !== undefined ? prices[sym] : c.price;
-    return new Collateral(c.symbol, c.amount, price, c.liquidationThreshold, c.supplyApy);
-  };
-
-  const priceBorrow = (b: Borrow): Borrow => {
-    const sym = b.symbol.toUpperCase();
-    const price = prices[sym] !== undefined ? prices[sym] : b.price;
-    return new Borrow(b.symbol, b.amount, price, b.borrowFactor, b.borrowApy);
-  };
-
   // Apply overrides to existing collateral
   let collateral = position.collateral.map(overrideCollateral);
-  // Append newly added collateral (with prices overridden if present)
-  collateral = [...collateral, ...addCollateral.map(priceCollateral)];
+  // Append newly added collateral with amount + price overrides applied
+  collateral = [...collateral, ...addCollateral.map(overrideCollateral)];
 
   // Apply overrides to existing borrows
   const existingBorrows = position.borrows.map(overrideBorrow);
-  // Append newly added borrows (with prices overridden if present)
-  const addedBorrows = addBorrows.map(priceBorrow);
+  // Append newly added borrows with amount + price overrides applied
+  const addedBorrows = addBorrows.map(overrideBorrow);
   const borrows = [...existingBorrows, ...addedBorrows];
 
   // Debt calculation

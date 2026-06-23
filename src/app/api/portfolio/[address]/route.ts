@@ -55,6 +55,7 @@ export async function GET(
     return NextResponse.json(response);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
+    console.error('[portfolio] fetch failed:', message);
     return NextResponse.json({ error: message }, { status: 502 });
   }
 }

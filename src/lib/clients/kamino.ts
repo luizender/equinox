@@ -15,35 +15,30 @@ import type {
 // Kamino REST API response types (private to this client)
 // --------------------------------------------------------------------------- //
 
+interface KaminoPortfolioDeposit {
+  symbol: string;
+  amount: string;
+  price: string;
+  liquidationLtv: string;
+}
+
+interface KaminoPortfolioBorrow {
+  symbol: string;
+  amount: string;
+  price: string;
+  value: string;
+  borrowFactor: string;
+}
+
 interface KaminoPortfolioLoan {
-  address: string;
-  marketAddress: string;
+  obligation: string;
+  market: string;
+  deposits: KaminoPortfolioDeposit[];
+  borrows: KaminoPortfolioBorrow[];
 }
 
 interface KaminoMarketResponse {
   name: string;
-}
-
-interface KaminoDeposit {
-  tokenName: string;
-  tokenAmount: string;
-  tokenPrice: string;
-  liquidationLtv: string;
-}
-
-interface KaminoBorrow {
-  tokenName: string;
-  tokenAmount: string;
-  tokenPrice: string;
-  tokenValue: string;
-  borrowFactor: string;
-}
-
-interface KaminoLoanDetail {
-  loanInfo: {
-    collateral: { deposits: KaminoDeposit[] };
-    debt: { borrows: KaminoBorrow[] };
-  };
 }
 
 interface KaminoReserveItem {
@@ -88,7 +83,9 @@ async function fetchJson<T>(url: string): Promise<T> {
     next: { revalidate: REVALIDATE_SECONDS },
   });
   if (!response.ok) {
-    throw new Error(`Kamino API error: ${response.status} ${response.statusText}`);
+    // Wrap in then() so a missing .text method rejects rather than throwing sync.
+    const body = await Promise.resolve().then(() => response.text()).catch(() => '');
+    throw new Error(`Kamino API error: ${response.status} ${response.statusText} — ${body}`);
   }
   return response.json() as Promise<T>;
 }
@@ -112,7 +109,7 @@ export async function loadKaminoPositions(wallet: string): Promise<PortfolioPosi
   const positions: PortfolioPosition[] = [];
 
   for (const loan of loans) {
-    const market = loan.marketAddress;
+    const market = loan.market;
     if (!(market in names)) {
       const marketData = await fetchJson<KaminoMarketResponse>(
         `${API_BASE}/v2/kamino-market/${market}`
@@ -121,8 +118,7 @@ export async function loadKaminoPositions(wallet: string): Promise<PortfolioPosi
       apyMaps[market] = await loadReserveApyMap(market);
     }
 
-    const detail = await fetchJson<KaminoLoanDetail>(`${API_BASE}/klend/loans/${loan.address}`);
-    positions.push(buildPosition(names[market], loan.address, detail, market, apyMaps[market]));
+    positions.push(buildPosition(names[market], loan.obligation, loan, market, apyMaps[market]));
   }
 
   return positions;
@@ -189,32 +185,31 @@ export async function resolveKaminoReserve(
 function buildPosition(
   marketName: string,
   address: string,
-  detail: KaminoLoanDetail,
+  loan: KaminoPortfolioLoan,
   marketId: string,
   apyMap: ReserveApyMap
 ): PortfolioPosition {
-  const info = detail.loanInfo;
-  const deposits = info.collateral.deposits;
-  const borrows = info.debt.borrows;
+  const deposits = loan.deposits;
+  const borrows = loan.borrows;
 
-  const collateral: PortfolioAsset[] = deposits.map((d) => ({
-    symbol: d.tokenName,
-    amount: parseFloat(d.tokenAmount),
-    price: parseFloat(d.tokenPrice),
+  const collateral: PortfolioAsset[] = deposits.map((d: KaminoPortfolioDeposit) => ({
+    symbol: d.symbol,
+    amount: parseFloat(d.amount),
+    price: parseFloat(d.price),
     liquidationThreshold: parseFloat(d.liquidationLtv),
-    supplyApy: apyMap.get(d.tokenName.toUpperCase())?.supplyApy ?? 0,
+    supplyApy: apyMap.get(d.symbol.toUpperCase())?.supplyApy ?? 0,
   }));
 
-  const borrowAssets: PortfolioBorrowAsset[] = borrows.map((b) => ({
-    symbol: b.tokenName,
-    amount: parseFloat(b.tokenAmount),
-    price: parseFloat(b.tokenPrice),
+  const borrowAssets: PortfolioBorrowAsset[] = borrows.map((b: KaminoPortfolioBorrow) => ({
+    symbol: b.symbol,
+    amount: parseFloat(b.amount),
+    price: parseFloat(b.price),
     borrowFactor: parseFloat(b.borrowFactor),
-    borrowApy: apyMap.get(b.tokenName.toUpperCase())?.borrowApy ?? 0,
+    borrowApy: apyMap.get(b.symbol.toUpperCase())?.borrowApy ?? 0,
   }));
 
   const debtValue = borrows.reduce(
-    (sum, b) => sum + parseFloat(b.tokenValue) * parseFloat(b.borrowFactor),
+    (sum: number, b: KaminoPortfolioBorrow) => sum + parseFloat(b.value) * parseFloat(b.borrowFactor),
     0
   );
 

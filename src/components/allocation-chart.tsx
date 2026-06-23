@@ -1,6 +1,6 @@
 'use client';
 
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
+import { PieChart, Pie, Cell, Tooltip } from 'recharts';
 import { Position } from '@/lib/math-engine';
 
 interface AllocationChartProps {
@@ -63,8 +63,7 @@ export default function AllocationChart({ positions }: AllocationChartProps) {
       <div className="flex-1 flex flex-col sm:flex-row items-center justify-center gap-6 min-h-[200px]">
         {/* Doughnut Chart container */}
         <div className="w-44 h-44 relative flex-shrink-0">
-          <ResponsiveContainer width="100%" height="100%">
-            <PieChart>
+          <PieChart width={176} height={176}>
               <Pie
                 data={data}
                 cx="50%"
@@ -100,7 +99,6 @@ export default function AllocationChart({ positions }: AllocationChartProps) {
                 }}
               />
             </PieChart>
-          </ResponsiveContainer>
           
           {/* Central label inside Doughnut */}
           <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
